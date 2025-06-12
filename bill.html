@@ -1,0 +1,205 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cloth Cutting Bill</title>
+
+  <!-- jsPDF + AutoTable CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/decimal.js/10.4.3/decimal.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 10px;
+      background: #f4f4f4;
+      font-size: 15px;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+      font-size: 15px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    .row {
+      display: flex;
+      gap: 5px;
+    }
+
+    .row input {
+      flex: 1;
+    }
+
+    .item {
+      background: white;
+      padding: 8px;
+      border-radius: 5px;
+      margin-top: 5px;
+    }
+
+    #total {
+      font-weight: bold;
+      margin-top: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<h2 style="text-align:center;">Cloth Cutting Bill</h2>
+
+<input type="text" id="style" placeholder="Style Name (e.g. Shadab Fancy)" />
+<div class="row">
+  <input type="number" id="price" placeholder="Price ₹" />
+  <input type="number" id="qty" placeholder="Qty" />
+</div>
+
+<button onclick="addItem()">➕ Add Item</button>
+<button onclick="generatePDF()">📄 Download PDF</button>
+
+<div id="list"></div>
+<div id="total">Total: ₹0</div>
+
+<script>
+  const items = [];
+
+  function addItem() {
+  const style = document.getElementById('style').value.trim();
+  const price = new Decimal(document.getElementById('price').value || 0);
+  const qty = new Decimal(document.getElementById('qty').value || 0);
+
+  if (!style || price.lte(0) || qty.lte(0)) {
+    alert('Enter valid style, price & quantity.');
+    return;
+  }
+
+  const total = price.mul(qty);
+
+  items.push({
+    style,
+    price,
+    qty,
+    total
+  });
+
+  document.getElementById('style').value = '';
+  document.getElementById('price').value = '';
+  document.getElementById('qty').value = '';
+
+  renderList();
+}
+
+function renderList() {
+  const container = document.getElementById('list');
+  container.innerHTML = '';
+  let grand = new Decimal(0);
+
+  items.forEach((item, index) => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.innerText = `${index + 1}. ${item.style} — ₹${item.price.toFixed()} x ${item.qty.toFixed()} = ₹${item.total.toFixed(6)}`;
+    container.appendChild(div);
+    grand = grand.add(item.total);
+  });
+
+  document.getElementById('total').innerText = `Total: ₹${grand.toFixed(6)}`;
+}
+
+
+async function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'pt',
+    format: 'A5'
+  });
+
+  doc.setFontSize(14);
+  doc.setFont('courier');
+  doc.text('Cloth Cutting Bill', doc.internal.pageSize.getWidth() / 2, 30, { align: 'center' });
+
+  let grandTotal = new Decimal(0);
+  const tableBody = items.map(item => {
+    // Recalculate using Decimal to guarantee accurate row
+    const price = new Decimal(item.price);
+    const qty = new Decimal(item.qty);
+    const total = price.mul(qty);
+    grandTotal = grandTotal.add(total);
+
+    return [
+      item.style,
+      price.toFixed(),           // full precision
+      qty.toFixed(),
+      total.toFixed()            // not fixed to 2 or 6 unless user wants
+    ];
+  });
+
+  doc.autoTable({
+    startY: 50,
+    head: [['Style', 'Price', 'Qty', 'Total']],
+    body: tableBody,
+    theme: 'grid',
+    styles: {
+      fontSize: 10,
+      font: 'courier',
+      halign: 'center',
+      cellPadding: 3,
+      overflow: 'hidden'
+    },
+    headStyles: {
+      fillColor: [41, 128, 185],
+      textColor: 255,
+      halign: 'center'
+    },
+    columnStyles: {
+      0: { cellWidth: 160, halign: 'left' },
+      1: { cellWidth: 70, halign: 'center' },
+      2: { cellWidth: 60, halign: 'center' },
+      3: { cellWidth: 90, halign: 'center' }
+    }
+  });
+
+  const finalY = doc.autoTable.previous.finalY + 10;
+
+  doc.autoTable({
+    startY: finalY,
+    body: [['', '', 'Grand Total', grandTotal.toFixed()]],
+    theme: 'grid',
+    styles: {
+      fontSize: 10,
+      font: 'courier',
+      halign: 'center',
+      cellPadding: 3
+    },
+    columnStyles: {
+      0: { cellWidth: 160 },
+      1: { cellWidth: 70 },
+      2: { cellWidth: 60, fontStyle: 'bold' },
+      3: { cellWidth: 90, fontStyle: 'bold' }
+    },
+    didDrawCell: data => {
+      if (data.row.index === 0 && data.column.index === 2) {
+        data.cell.styles.halign = 'right';
+      }
+      if (data.row.index === 0 && data.column.index === 3) {
+        data.cell.styles.halign = 'center';
+      }
+    }
+  });
+
+  doc.save('Cloth_Bill.pdf');
+}
+
+
+
+</script>
+
+</body>
+</html>
